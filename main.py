@@ -22,7 +22,7 @@ async def main():
         )
 
         for tool in tools:
-            print(f" - {tool.name}")
+            print(f" - {tool['name']}")
 
         agent = ReActAgent(
             llm=llm,
