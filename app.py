@@ -3,7 +3,7 @@ import streamlit as st
 
 from agent.react_agent import ReActAgent
 from llm.client import LLMClient, uploaded_image_to_data_url
-from mcp_client.ros_client import ROSMCPClient
+from mcp_client.ros_client_http import ROSMCPClient
 
 
 st.set_page_config(
@@ -160,11 +160,11 @@ if prompt:
 
     st.session_state.messages.append({
         "role": "user",
-        "content": prompt,
+        "content": user_text,
     })
 
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(user_text)
 
     # --------------------------------------
     # Ejecutar agente
