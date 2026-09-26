@@ -27,6 +27,7 @@ class LLMClient:
             "instructions": instructions,
             "input": input_data,
             "tools": tools,
+            "parallel_tool_calls": False,
         }
 
         if previous_response_id:

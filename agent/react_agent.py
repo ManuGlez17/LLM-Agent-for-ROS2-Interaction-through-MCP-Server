@@ -21,11 +21,13 @@ class ReActAgent:
         self.model = model
 
         self.max_steps = 100
+        self.previous_response_id = None
 
     async def run(self, goal: str):
 
         context = AgentContext(
-            goal=goal
+            goal=goal,
+            previous_response_id=self.previous_response_id,
         )
         
         while context.state not in {
@@ -61,41 +63,42 @@ class ReActAgent:
 
                 await self._observe(context)
 
+        self.previous_response_id = (
+            context.previous_response_id
+        )
+
         return context.final_answer
 
     async def _decide(self, context):
-
-        print("LLM decidiendo siguiente acción...")
-
         instructions = """
-    Eres un agente encargado de controlar e inspeccionar
-    un sistema ROS utilizando herramientas MCP.
+    Eres un agente robótico que utiliza herramientas MCP
+    para interactuar con ROS.
 
-    Tu objetivo es completar la solicitud del usuario.
-
-    Reglas:
-
-    - Utiliza herramientas MCP cuando necesites información
-    del sistema ROS o ejecutar una acción.
-    - Nunca inventes resultados de ROS.
-    - Realiza una sola acción importante a la vez.
-    - Después de recibir el resultado de una herramienta,
-    utiliza esa observación para decidir qué hacer después.
-    - Si el objetivo ya está cumplido, responde al usuario.
+    Usa observaciones reales del sistema.
+    No inventes resultados.
     """
 
-        # Primera iteración
-        if context.previous_response_id is None:
+        # ====================================
+        # CASO 1:
+        # Nuevo mensaje del usuario
+        # ====================================
 
-            input_data = context.goal
+        if context.observation is None:
 
             response = await self.llm.generate(
                 instructions=instructions,
-                input_data=input_data,
+                input_data=context.goal,
                 tools=self.tools,
+                previous_response_id=(
+                    context.previous_response_id
+                ),
             )
 
-        # Hay una observación de la acción anterior
+        # ====================================
+        # CASO 2:
+        # Resultado de una herramienta MCP
+        # ====================================
+
         else:
 
             input_data = [
@@ -109,15 +112,15 @@ class ReActAgent:
                 }
             ]
 
-
             response = await self.llm.generate(
                 instructions=instructions,
-                previous_response_id=
-                    context.previous_response_id,
                 input_data=input_data,
                 tools=self.tools,
+                previous_response_id=(
+                    context.previous_response_id
+                ),
             )
-
+            context.observation = None
         context.previous_response_id = response.id
 
         tool_calls = [
@@ -130,16 +133,12 @@ class ReActAgent:
 
             context.pending_call = tool_calls[0]
 
-            print(
-                "Acción seleccionada:",
-                context.pending_call.name
-            )
-
             context.state = AgentState.ACT
 
             return
 
         context.final_answer = response.output_text
+
         context.state = AgentState.DONE
 
     async def _act(self, context):
