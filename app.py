@@ -2,7 +2,7 @@ import asyncio
 import streamlit as st
 
 from agent.react_agent import ReActAgent
-from llm.client import LLMClient
+from llm.client import LLMClient, uploaded_image_to_data_url
 from mcp_client.ros_client import ROSMCPClient
 
 
@@ -28,7 +28,7 @@ if "previous_response_id" not in st.session_state:
 # FUNCIÓN PARA EJECUTAR EL AGENTE
 # ==========================================
 
-async def execute_agent(user_message):
+async def execute_agent(user_message, image_url=None, ):
 
     llm = LLMClient()
 
@@ -48,7 +48,8 @@ async def execute_agent(user_message):
         )
 
         response = await agent.run(
-            user_message
+            goal = user_message,
+            image_url=image_url,
         )
 
         # Guardamos el estado para el siguiente mensaje
@@ -118,12 +119,41 @@ for message in st.session_state.messages:
 # ==========================================
 
 prompt = st.chat_input(
-    "Escribe una instrucción para el robot..."
+    "Escribe una instrucción para el robot...",
+    accept_file=True,
+    file_type=[
+        "jpg",
+        "jpeg",
+        "png",
+    ],
 )
 
 
 if prompt:
+    user_text = prompt.text
 
+    uploaded_image = None
+
+    if prompt.files:
+        uploaded_image = prompt.files[0]
+    else:
+        uploaded_image = None
+    
+    if uploaded_image:
+        st.image(
+            uploaded_image,
+            caption="Imagen enviada",
+        )
+    image_url = None
+
+    if uploaded_image:
+
+        image_url = uploaded_image_to_data_url(
+            uploaded_image
+        )
+
+    if not user_text:
+        user_text = "Describe esta imagen."
     # --------------------------------------
     # Mensaje usuario
     # --------------------------------------
@@ -154,7 +184,7 @@ if prompt:
                 )
 
                 response = asyncio.run(
-                    execute_agent(prompt)
+                    execute_agent(user_text, image_url=image_url)
                 )
 
                 status.update(

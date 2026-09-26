@@ -23,12 +23,14 @@ class ReActAgent:
         self.max_steps = 100
         self.previous_response_id = None
 
-    async def run(self, goal: str):
+    async def run(self, goal: str, image_url = None):
 
         context = AgentContext(
             goal=goal,
             previous_response_id=self.previous_response_id,
         )
+
+        context.image_url = image_url
         
         while context.state not in {
             AgentState.DONE,
@@ -76,6 +78,11 @@ class ReActAgent:
 
     Usa observaciones reales del sistema.
     No inventes resultados.
+    Si el usuario proporciona una imagen adjunta directamente
+    como entrada multimodal, analiza esa imagen directamente.
+
+    NO utilices view_saved_image para analizar una imagen adjunta
+    por el usuario.
     """
 
         # ====================================
@@ -85,14 +92,36 @@ class ReActAgent:
 
         if context.observation is None:
 
+            if context.image_url is not None:
+
+                input_data = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "input_text",
+                                "text": context.goal,
+                            },
+                            {
+                                "type": "input_image",
+                                "image_url": context.image_url,
+                                "detail": "high",
+                            },
+                        ],
+                    }
+                ]
+
+            else:
+                input_data = context.goal
+
             response = await self.llm.generate(
-                instructions=instructions,
-                input_data=context.goal,
-                tools=self.tools,
-                previous_response_id=(
-                    context.previous_response_id
-                ),
-            )
+                    instructions=instructions,
+                    input_data=input_data,
+                    tools=self.tools,
+                    previous_response_id=(
+                        context.previous_response_id
+                    ),
+                )
 
         # ====================================
         # CASO 2:

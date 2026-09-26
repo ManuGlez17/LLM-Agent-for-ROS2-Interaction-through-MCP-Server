@@ -21,4 +21,6 @@ class AgentContext:
 
     final_answer: str | None = None
 
+    image_url: str | None = None
+
     history: list = field(default_factory=list)
