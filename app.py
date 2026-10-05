@@ -1,10 +1,13 @@
 import asyncio
+import uuid
 import streamlit as st
 
 from agent.react_agent import ReActAgent
 from llm.client import LLMClient, uploaded_image_to_data_url
 from mcp_client.ros_client_http import ROSMCPClient
 
+
+from logging_utils.session_logger import SessionLogger
 
 st.set_page_config(
     page_title="ROS ReAct Agent",
@@ -23,12 +26,22 @@ if "messages" not in st.session_state:
 if "previous_response_id" not in st.session_state:
     st.session_state.previous_response_id = None
 
+if "session_id" not in st.session_state:
+
+    st.session_state.session_id = (
+        str(uuid.uuid4())
+    )
+
+logger = SessionLogger(
+    st.session_state.session_id
+)
+
 
 # ==========================================
 # FUNCIÓN PARA EJECUTAR EL AGENTE
 # ==========================================
 
-async def execute_agent(user_message, image_url=None, ):
+async def execute_agent(user_message, image_url=None, logger=None,):
 
     llm = LLMClient()
 
@@ -40,6 +53,7 @@ async def execute_agent(user_message, image_url=None, ):
             llm=llm,
             mcp_client=ros_mcp,
             tools=tools,
+            logger=logger,
         )
 
         # Recuperamos la conversación anterior
@@ -128,7 +142,6 @@ prompt = st.chat_input(
     ],
 )
 
-
 if prompt:
     user_text = prompt.text
 
@@ -163,6 +176,11 @@ if prompt:
         "content": user_text,
     })
 
+    logger.log_message(
+        role="user",
+        content=user_text,
+    )
+
     with st.chat_message("user"):
         st.markdown(user_text)
 
@@ -184,7 +202,7 @@ if prompt:
                 )
 
                 response = asyncio.run(
-                    execute_agent(user_text, image_url=image_url)
+                    execute_agent(user_text, image_url=image_url, logger=logger,)
                 )
 
                 status.update(
@@ -215,3 +233,8 @@ if prompt:
         "role": "assistant",
         "content": response,
     })
+
+    logger.log_message(
+        role="assistant",
+        content=response,
+    )

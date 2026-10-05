@@ -11,6 +11,7 @@ class ReActAgent:
         llm,
         mcp_client,
         tools,
+        logger=None,
         model="gpt-5.6-terra",
     ):
 
@@ -20,8 +21,25 @@ class ReActAgent:
         self.tools = tools
         self.model = model
 
+        self.logger = logger
+
         self.max_steps = 100
         self.previous_response_id = None
+
+
+    def _log(
+        self,
+        event,
+        data=None,
+    ):
+
+        if self.logger:
+
+            self.logger.log_agent(
+                event,
+                data,
+            )
+
 
     async def run(self, goal: str, image_url = None):
 
@@ -39,10 +57,14 @@ class ReActAgent:
 
             context.step += 1
 
-            print(
+            message = (
                 f"\n[{context.step}] "
                 f"STATE = {context.state.name}"
             )
+
+            print(message)
+
+            self._log("step", {"step": context.step, "state": context.state.name})
 
             if context.step > self.max_steps:
 
@@ -162,6 +184,22 @@ class ReActAgent:
 
             context.pending_call = tool_calls[0]
 
+            print("Accion seleccionada:", context.pending_call.name)
+
+            self._log(
+                "TOOL_SELECTED",
+                {
+                    "step": context.step,
+                    "tool":
+                        context.pending_call.name,
+
+                    "arguments":
+                        context.pending_call.arguments,
+
+                    "call_id":
+                        context.pending_call.call_id,
+                },
+            )
             context.state = AgentState.ACT
 
             return
@@ -170,11 +208,21 @@ class ReActAgent:
 
         context.state = AgentState.DONE
 
+        self._log(
+            "DONE",
+            {
+                "step": context.step,
+                "answer":
+                    context.final_answer,
+            },
+        )
+
     async def _act(self, context):
 
         call = context.pending_call
 
         print(f"Ejecutando MCP: {call.name}")
+
 
         try:
 
@@ -189,6 +237,16 @@ class ReActAgent:
                     indent=2,
                     ensure_ascii=False,
                 )
+            )
+
+            
+            self._log(
+                            "ACT",
+                            {
+                                "step": context.step,
+                                "tool": call.name,
+                                "arguments": arguments,
+                            },
             )
 
             result = await self.mcp.call_tool(
@@ -208,6 +266,19 @@ class ReActAgent:
                 }
             )
 
+            if "base64" in context.observation:
+                logged_result = "[image data omitted]"
+            else:
+                logged_result = context.observation
+            self._log(
+                "MCP_RESULT",
+                {
+                    "step": context.step,
+                    "tool": call.name,
+                    "result": logged_result,
+                },
+            )
+
             context.state = AgentState.OBSERVE
 
         except Exception as error:
@@ -215,6 +286,15 @@ class ReActAgent:
             context.observation = json.dumps({
                 "error": str(error)
             })
+
+            self._log(
+                "ERROR",
+                {
+                    "step": context.step,
+                    "tool": call.name,
+                    "error": str(error),
+                },
+            )
 
             context.state = AgentState.OBSERVE
 
