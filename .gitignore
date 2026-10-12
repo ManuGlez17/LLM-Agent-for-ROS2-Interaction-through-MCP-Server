@@ -17,6 +17,7 @@ __pycache__/
 # Logs
 *.log
 logs/
+experiments/
 
 # Archivos temporales
 *.tmp
