@@ -32,8 +32,12 @@ if "session_id" not in st.session_state:
         str(uuid.uuid4())
     )
 
+if "episode_number" not in st.session_state:
+    st.session_state.episode_number = 1
+
 logger = SessionLogger(
-    st.session_state.session_id
+    st.session_state.session_id,
+    episode_number=st.session_state.episode_number,
 )
 
 
@@ -69,6 +73,11 @@ async def execute_agent(user_message, image_url=None, logger=None,):
         # Guardamos el estado para el siguiente mensaje
         st.session_state.previous_response_id = (
             agent.previous_response_id
+        )
+
+        # Guardamos el número de episodio para el siguiente mensaje
+        st.session_state.episode_number = (
+            logger.episode_number
         )
 
         return response

@@ -3,6 +3,8 @@ import json
 from .states import AgentState
 from .context import AgentContext
 
+import time
+
 
 class ReActAgent:
 
@@ -40,8 +42,23 @@ class ReActAgent:
                 data,
             )
 
+    def _log_experiment(
+        self,
+        event,
+        data=None,
+    ):
+
+        if self.logger:
+
+            self.logger.log_experiment(
+                event,
+                data,
+            )
+
 
     async def run(self, goal: str, image_url = None):
+
+        task_start = time.perf_counter()
 
         context = AgentContext(
             goal=goal,
@@ -91,6 +108,34 @@ class ReActAgent:
             context.previous_response_id
         )
 
+        context.task_time += time.perf_counter() - task_start
+
+        self._log_experiment(
+                    f"episode_{self.logger.episode_number}",
+                    {
+                        "goal": context.goal,
+                        "step": context.step,
+                        "final_answer":
+                            context.final_answer,
+                        "task_time":
+                            context.task_time,
+                        "llm_calls":
+                            context.llm_calls,
+                        "tool_calls":
+                            context.tool_calls,
+                        "llm_time":
+                            context.llm_time,
+                        "tool_time":
+                            context.tool_time,
+                        "input_tokens":
+                            context.input_tokens,
+                        "output_tokens":
+                            context.output_tokens,
+                    },
+                )
+        
+        self.logger.episode_number += 1
+
         return context.final_answer
 
     async def _decide(self, context):
@@ -136,6 +181,8 @@ class ReActAgent:
             else:
                 input_data = context.goal
 
+            llm_start = time.perf_counter()
+
             response = await self.llm.generate(
                     instructions=instructions,
                     input_data=input_data,
@@ -144,6 +191,18 @@ class ReActAgent:
                         context.previous_response_id
                     ),
                 )
+            
+            context.llm_time += time.perf_counter() - llm_start
+            context.llm_calls += 1
+
+            context.input_tokens += (
+                            response.usage.input_tokens
+                        )
+            
+            context.output_tokens += (
+                            response.usage.output_tokens
+            )
+            
 
         # ====================================
         # CASO 2:
@@ -163,6 +222,8 @@ class ReActAgent:
                 }
             ]
 
+            llm_start = time.perf_counter()
+
             response = await self.llm.generate(
                 instructions=instructions,
                 input_data=input_data,
@@ -171,6 +232,18 @@ class ReActAgent:
                     context.previous_response_id
                 ),
             )
+
+            context.llm_time += time.perf_counter() - llm_start
+            context.llm_calls += 1
+
+            context.input_tokens += (
+                response.usage.input_tokens
+            )
+
+            context.output_tokens += (
+                response.usage.output_tokens
+            )
+
             context.observation = None
         context.previous_response_id = response.id
 
@@ -249,10 +322,15 @@ class ReActAgent:
                             },
             )
 
+            tool_start = time.perf_counter()
+        
             result = await self.mcp.call_tool(
                 call.name,
                 arguments,
             )
+
+            context.tool_time += time.perf_counter() - tool_start
+            context.tool_calls += 1
 
             context.observation = (
                 self._serialize_result(result)
